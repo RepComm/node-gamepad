@@ -24,9 +24,9 @@ console.log(gps);
 ```
 
 ## Currently implements
-1. `Gamepad.getGamepads`
-2. `Gamepad` - bare bones instancing
-3. `GamepadVendor` - enough to satisfy
+1. `Gamepad.getGamepads` - finished
+2. `Gamepad` - instancing and raw buffer getting!
+3. `GamepadVendor` - satisfactory
 
 ## Status
-Not ready for use
+Nearly ready for alpha testing

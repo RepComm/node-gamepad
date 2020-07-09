@@ -14,38 +14,59 @@ class Gamepad {
   static AllGamepads = undefined;
   /**Instantiates a gamepad instance referencing an hid device
    * Please don't call this if you don't know what you're doing
-   * @param {HID} dev
+   * @param {import("usb").Device} dev
    * @param {GamepadVendor} vendor
    */
   constructor(dev, vendor) {
     this.vendor = vendor;
 
-    this.hid = dev;
+    this.device = dev;
+
+    /**@type {import("usb").OutEndpoint}*/
+    this.out = undefined;
+    /**@type {import("usb").InEndpoint}*/
+    this.in = undefined;
 
     /**@param {Buffer} data*/
     this.onData = (data) => {
+      //TODO - parse controller specific data here
       console.log(data.toString());
     }
 
-    this.registerListeners();
+    try {
+      this.device.open(true);
+
+      for (let inter of this.device.interfaces) {
+        if (inter.isKernelDriverActive()) {
+          inter.detachKernelDriver();
+        }
+        inter.claim();
+        for (let endpoint of inter.endpoints) {
+          if (!this.out && endpoint instanceof usb.OutEndpoint) {
+            this.out = endpoint;
+          } else if (!this.in && endpoint instanceof usb.InEndpoint) {
+            this.in = endpoint;
+          }
+        }
+      }
+
+      if (this.in) {
+        this.in.on("data", this.onData);
+        try {
+          this.in.startPoll();
+        } catch (ex) {
+          console.warn(ex);
+        }
+      }
+    } catch (ex) {
+      throw "Could not open device > " + ex;
+    }
   }
   get connected() {
     //TODO - more implementation here
     return (
-      this.hid
+      this.device
     );
-  }
-  /**Internal - called on instantiation
-   * Registers HID event listeners needed to do updates
-   */
-  registerListeners() {
-    //TODO - more implementation here
-  }
-  /**Internal
-   * Removes HID event listeners
-   */
-  unregisterListeners() {
-    throw "Not implemented yet";
   }
   /**Tries to add a usb device as gamepad
    * @param {import("usb").Device} dev
@@ -56,43 +77,40 @@ class Gamepad {
 
     // console.log(`vendorId : ${vendorId}, productId : ${productId} / vendorId : ${vendorId.toString(16)}, productId : ${productId.toString(16)}`);
 
-    let ven = GamepadVendor.matches(productId, productId);
+    let ven = GamepadVendor.matches(vendorId, productId);
 
     if (ven) {
       try {
-        // console.log("Found gamepad!", ven);
-        // dev.open(true);
         let gp = new Gamepad(dev, ven);
-        Gamepad.getGamepadsNoQuery().push(gp);
+        Gamepad.getGamepads().push(gp);
       } catch (ex) {
         //Skip this one
-        console.warn("Could not use device", dev);
-        // throw "Could use device " + dev;
+        console.warn("Could not use device >", ex);
       }
     }
-  }
-  /**Internal - non-spec
-   * Get all the loaded gamepads without usb query stuff
-   * @returns {Array<Gamepad>}
-   */
-  static getGamepadsNoQuery () {
-    if (!Gamepad.AllGamepads) {
-      Gamepad.AllGamepads = new Array();
-    }
-    return Gamepad.AllGamepads;
   }
   /**Get all the available gamepads
    * Analog to navigator.getGamepads
    * @returns {Array<Gamepad>}
    */
   static getGamepads() {
+    if (!Gamepad.AllGamepads) {
+      Gamepad.AllGamepads = new Array();
+    }
+    return Gamepad.AllGamepads;
+  }
+  /**Internal - non-spec
+   * Get all the loaded gamepads without usb query stuff
+   * @returns {Array<Gamepad>}
+   */
+  static getGamepadsWithNativeQuery() {
     let devs = getNativeUsbs();
 
     for (let dev of devs) {
       Gamepad.tryAddDevice(dev);
     }
     let result = new Array();
-    Gamepad.getGamepadsNoQuery ().forEach((gp)=>{
+    Gamepad.getGamepads().forEach((gp) => {
       result.push(gp);
     });
     return result;
@@ -108,7 +126,7 @@ class GamepadVendor {
    * @param {number} vendorId 
    * @param {number} productId 
    */
-  constructor(vendorId, productId, vendorName="") {
+  constructor(vendorId, productId, vendorName = "") {
     this.vendorId = vendorId;
     this.productId = productId;
     this.vendorName = vendorName;
@@ -118,8 +136,8 @@ class GamepadVendor {
    * @param {number} productId
    * @param {GamepadVendor|false}
    */
-  static tryAdd (vendorId, productId, vendorName="") {
-    GamepadVendor.getAll().forEach((gp)=>{
+  static tryAdd(vendorId, productId, vendorName = "") {
+    GamepadVendor.getAll().forEach((gp) => {
       if (gp.vendorId === vendorId && gp.productId === productId) return false;
     });
     let result = new GamepadVendor(vendorId, productId, vendorName);
@@ -167,21 +185,23 @@ class GamepadVendor {
    */
   static matches(vendorId, productId) {
     for (let ven of GamepadVendor.getAll()) {
-      if (ven.productId === vendorId && ven.productId === productId) return ven;
+      if (ven.vendorId === vendorId && ven.productId === productId) return ven;
     }
     return false;
   }
 }
 
-usb.on("attach", (dev)=>{
+usb.on("attach", (dev) => {
   Gamepad.tryAddDevice(dev);
 });
 
-usb.on("detach", (dev)=>{
+usb.on("detach", (dev) => {
   //Gamepad.tryRemoveDevice(dev);
 });
 
 GamepadVendor.loadDefaultVendors();
+
+Gamepad.getGamepadsWithNativeQuery();
 
 module.exports = {
   Gamepad, GamepadVendor
