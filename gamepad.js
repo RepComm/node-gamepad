@@ -7,10 +7,36 @@ function getNativeUsbs() {
   return usb.getDeviceList();
 }
 
+const xboxoneParse = require("./lib/controllers/xboxone.js");
+
+/**Attempts to confirm to this
+ * https://developer.mozilla.org/en-US/docs/Web/API/GamepadButton
+ */
+class GamepadButton {
+  constructor () {
+    this._pressed = false;
+    this._touched = false;
+    this._value = 0;
+  }
+  get pressed () {
+    return this._pressed;
+  }
+  get touched () {
+    return this._touched;
+  }
+  get value () {
+    return this._value;
+  }
+}
+
 /**Attempts to conform to this
- * https://developer.mozilla.org/en-US/docs/Web/API/Gamepad_API/Using_the_Gamepad_API
+ * https://developer.mozilla.org/en-US/docs/Web/API/Gamepad
  */
 class Gamepad {
+  /**Internal - non spec
+   * Use Gamepad.getGamepads()
+   * @type {Array<Gamepad>}
+   */
   static AllGamepads = undefined;
   /**Instantiates a gamepad instance referencing an hid device
    * Please don't call this if you don't know what you're doing
@@ -18,19 +44,45 @@ class Gamepad {
    * @param {GamepadVendor} vendor
    */
   constructor(dev, vendor) {
+    /**@type {Array<GamepadButton>}*/
+    this._buttons = new Array(10);
+    for (let i=0; i<this._buttons.length; i++) {
+      this._buttons[i] = new GamepadButton();
+    }
+
+    /**@type {Array<number>}*/
+    this._axes = new Array(7);
+
+    /**non spec
+     * GamepadVendor
+     */
     this.vendor = vendor;
 
+    /**Internal - non spec
+     * node-usb device
+     */
     this.device = dev;
 
-    /**@type {import("usb").OutEndpoint}*/
+    /**Internal - non spec
+     * @type {import("usb").OutEndpoint}*/
     this.out = undefined;
-    /**@type {import("usb").InEndpoint}*/
+    /**Internal - non spec
+     * @type {import("usb").InEndpoint}*/
     this.in = undefined;
 
-    /**@param {Buffer} data*/
+    /**Internal - non spec
+     * @param {Buffer} data*/
     this.onData = (data) => {
       //TODO - parse controller specific data here
-      console.log(data.toString());
+      xboxoneParse(this, data);
+      // console.log(data[4].toString(2));
+    }
+
+    /**Internal - non spec
+     * @param {string} ex 
+     */
+    this.onError = (ex)=>{
+      this.markDirty();
     }
 
     try {
@@ -52,6 +104,7 @@ class Gamepad {
 
       if (this.in) {
         this.in.on("data", this.onData);
+        this.in.on("error", this.onError);
         try {
           this.in.startPoll();
         } catch (ex) {
@@ -62,13 +115,43 @@ class Gamepad {
       throw "Could not open device > " + ex;
     }
   }
+  get buttons () {
+    return this._buttons;
+  }
+  get axes () {
+    return this._axes;
+  }
   get connected() {
     //TODO - more implementation here
     return (
-      this.device
+      this.device && !this.getDirty()
     );
   }
-  /**Tries to add a usb device as gamepad
+  /**Internal - non spec
+   * Copies button data from btnConfig
+   * Used by usb data parsers
+   * @param {*} btnConfig 
+   */
+  setButtons (btnConfig) {
+
+  }
+  /**Internal - non spec
+   * Gets if this gamepad is marked as dirty
+   * @returns {boolean}
+   */
+  getDirty () {
+    return this._dirty;
+  }
+  /**Internal - non spec
+   * Marks gamepad instance as dirty (broken)
+   * Will cause connected to return false
+   */
+  markDirty () {
+    this._dirty = true;
+    console.warn("Disconnected gamepad, we need more testing here");
+  }
+  /**Internal - non spec
+   * Tries to add a usb device as gamepad
    * @param {import("usb").Device} dev
    */
   static tryAddDevice(dev) {
@@ -117,6 +200,10 @@ class Gamepad {
   }
 }
 
+/**
+ * Not part of the Gamepad API official specs
+ * Used to help identify gamepads for node-gamepad
+ */
 class GamepadVendor {
   /**Where key is vendorId
    * @type {Array<GamepadVendor>|undefined} internal*/
@@ -204,5 +291,5 @@ GamepadVendor.loadDefaultVendors();
 Gamepad.getGamepadsWithNativeQuery();
 
 module.exports = {
-  Gamepad, GamepadVendor
+  Gamepad, GamepadVendor, GamepadButton
 };
