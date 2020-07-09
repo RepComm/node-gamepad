@@ -1,0 +1,19 @@
+{
+  "name": "node-gamepad",
+  "title": "node-gamepad",
+  "version": "1.0.0",
+  "description": "A partial implementation of Gamepad API for node",
+  "keywords": [
+    "gamepad"
+  ],
+  "author": "Jon (RepComm)",
+  "main": "example.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RepComm/node-gamepad"
+  },
+  "dependencies": {
+    "node-hid": "*",
+    "usb": "^1.6.3"
+  }
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "xbox360",
+    "vendorId": 1118,
+    "productId": 654
+  },
+  {
+    "name": "xboxone",
+    "vendorId": 9414,
+    "productId": 22554
+  }
+]
